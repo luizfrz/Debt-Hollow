@@ -1,0 +1,55 @@
+{
+  "name": "ADividaDeHollow",
+  "tree": {
+    "$className": "DataModel",
+
+    "ReplicatedStorage": {
+      "$path": "src/shared",
+      "$ignoreUnknownInstances": true,
+      "Remotes": {
+        "$className": "Folder",
+        "Objective": { "$className": "RemoteEvent" },
+        "Notify": { "$className": "RemoteEvent" },
+        "Jumpscare": { "$className": "RemoteEvent" },
+        "Sprint": { "$className": "RemoteEvent" },
+        "Crouch": { "$className": "RemoteEvent" },
+        "Chase": { "$className": "RemoteEvent" },
+        "ClientReady": { "$className": "RemoteEvent" },
+        "Phase": { "$className": "RemoteEvent" },
+        "Result": { "$className": "RemoteEvent" },
+        "Rush": { "$className": "RemoteEvent" },
+        "Unhide": { "$className": "RemoteEvent" },
+        "Tension": { "$className": "RemoteEvent" },
+        "Wallet": { "$className": "RemoteEvent" },
+        "UseBattery": { "$className": "RemoteEvent" },
+        "Recharge": { "$className": "RemoteEvent" },
+        "ShopAction": { "$className": "RemoteFunction" }
+      }
+    },
+
+    "ServerScriptService": {
+      "$path": "src/server",
+      "$ignoreUnknownInstances": true
+    },
+
+    "ServerStorage": {
+      "$path": "src/serverStorage",
+      "$ignoreUnknownInstances": true,
+      "Award": { "$className": "BindableEvent" },
+      "TryRevive": { "$className": "BindableFunction" }
+    },
+
+    "StarterPlayer": {
+      "$ignoreUnknownInstances": true,
+      "$properties": {
+        "CameraMode": "LockFirstPerson",
+        "CharacterWalkSpeed": 13,
+        "CharacterJumpHeight": 3
+      },
+      "StarterPlayerScripts": {
+        "$path": "src/client",
+        "$ignoreUnknownInstances": true
+      }
+    }
+  }
+}
