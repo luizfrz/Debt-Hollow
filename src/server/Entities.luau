@@ -1,8 +1,11 @@
 -- Entities: modelos e IA das criaturas da Mansão Hollow
 --   visitante  (Fase 1)  o Credor: vê e ouve
 --   enfermeira (Fase 2)  Sra. Voss: cega, só ouve
---   clara      (Fase 3)  só se move quando ninguém olha
+--   clara      (Fase 1 em visitas, Fase 3 no final)  só se move quando ninguém olha
 --   coro       (Fase 3)  as vozes: investida em linha reta, só os armários salvam
+--   visitas    (Fase 1)  estilo Doors: a criatura não fica no mapa o tempo todo; um aviso
+--                        anuncia a chegada, ela caça por um tempo e some quando ninguém olha
+local Players = game:GetService("Players")
 local PFS = game:GetService("PathfindingService")
 local RunService = game:GetService("RunService")
 local RS = game:GetService("ReplicatedStorage")
@@ -229,6 +232,7 @@ function Walker:goTo(target, force)
 end
 
 function Walker:retreat()
+	if self.onRetreat then self:onRetreat() return end -- visita: ela vai embora em vez de voltar ao spawn
 	self:place(self.level.MonsterSpawn.Position)
 	self.state = "patrol"; self.waypoints = nil; self.lostAt = nil; self.hunting = false
 	self.ctrl.graceUntil = os.clock() + 8
@@ -265,10 +269,15 @@ function Walker:step(dt)
 	local d = tgt - cur
 	if d.Magnitude < 1.2 then self.wpIndex += 1; return end
 	local dir = d.Unit
+	local nxt = self.waypoints[self.wpIndex + 1]
+	if nxt and d.Magnitude < 4 then -- faz a curva antes do ponto, sem quebrar em angulo reto
+		local nd = Vector3.new(nxt.Position.X - cur.X, 0, nxt.Position.Z - cur.Z)
+		if nd.Magnitude > 0.1 then dir = (dir * d.Magnitude + nd.Unit * (4 - d.Magnitude)).Unit end
+	end
 	self.curSpeed = (self.curSpeed or 0) + (self.speed - (self.curSpeed or 0)) * math.min(1, dt * 3.5) -- acelera sem tranco
 	local newPos = cur + dir * math.min(d.Magnitude, self.curSpeed * dt)
 	local want = CFrame.lookAt(newPos, newPos + dir).Rotation
-	self.face = self.face and self.face:Lerp(want, math.min(1, dt * 7)) or want -- curva suave
+	self.face = self.face and self.face:Lerp(want, math.min(1, dt * 5)) or want -- curva suave
 	local cf = CFrame.new(newPos) * self.face
 	if self.anim then
 		self.anim:update(cf, dt, self.curSpeed, 'walk')
@@ -398,30 +407,44 @@ function BRAIN.enfermeira(self, ctrl, ctx)
 	end
 end
 
-local function watching(self, t)
+-- pés, tronco e cabeça (a origem da Clara é nos pés): basta um ponto visível para ela congelar
+local LOOK_PTS = {1.2, 2.4, 3.6}
+local function watching(self, t, rp)
 	local head = t.root.Position + Vector3.new(0, 1.5, 0)
-	local to = (self.root.Position + Vector3.new(0, 1, 0)) - head
-	if to.Magnitude > 120 then return false end
-	if t.root.CFrame.LookVector:Dot(to.Unit) < 0.4 then return false end
-	local rp = RaycastParams.new()
-	rp.FilterType = Enum.RaycastFilterType.Exclude
-	rp.FilterDescendantsInstances = {self.ctrl.folder, t.ch}
-	return workspace:Raycast(head, to, rp) == nil
+	for _, h in ipairs(LOOK_PTS) do
+		local to = (self.root.Position + Vector3.new(0, h, 0)) - head
+		if to.Magnitude > 120 then return false end
+		if t.root.CFrame.LookVector:Dot(to.Unit) >= 0.4 and workspace:Raycast(head, to, rp) == nil then return true end
+	end
+	return false
 end
+
+local CLARA = {speed = 14, rage = 18, wander = 7} -- andar do jogador = 13, correr = 21
 
 -- Clara: sabe onde você está; só congela enquanto alguém olha para ela.
 function BRAIN.clara(self, ctrl, ctx)
 	local targets = ctx.getTargets()
-	if #targets == 0 then self.frozen = false; self.waypoints = nil; return end
+	local rp = RaycastParams.new()
+	rp.FilterType = Enum.RaycastFilterType.Exclude
+	rp.RespectCanCollide = true -- itens, teias e decoração sem colisão não tapam a visão
+	local ignore = {ctrl.folder}
+	for _, pl in ipairs(Players:GetPlayers()) do if pl.Character then table.insert(ignore, pl.Character) end end
+	rp.FilterDescendantsInstances = ignore
 	local watched = false
 	for _, t in ipairs(targets) do
-		if watching(self, t) then watched = true; break end
+		if watching(self, t, rp) then watched = true; break end
 	end
-	self.frozen = watched
+	self.frozen, self.watched = watched, watched
 	if watched then return end
+	if #targets == 0 then -- todos escondidos: ela vaga pela casa procurando
+		self.hunting = false; ctrl.updateChase()
+		self.speed = CLARA.wander
+		if not self.waypoints then self:goTo(ctrl.randomCell(), true) end
+		return
+	end
 	local best, bd = nearest(self, targets)
 	self.hunting = bd < 40; ctrl.updateChase()
-	self.speed = ctrl.rage and 20 or 16
+	self.speed = ctrl.rage and CLARA.rage or CLARA.speed
 	self:goTo(best.root.Position)
 end
 
@@ -463,6 +486,21 @@ local function newWalker(kind, ctrl, level, ctx)
 end
 
 ---------------------------------------------------------------------
+-- Visitas (estilo Doors): tempos em segundos {mín, máx}
+---------------------------------------------------------------------
+local VISIT = {first = {20, 35}, every = {60, 100}, stay = {40, 60}, warn = 5, leaveWait = 10}
+local VISIT_MSG = {
+	"Algo acordou na mansão...",
+	"Você ouve passos pequenos pelos corredores...",
+	"Uma risada de criança ecoa pelas paredes...",
+	"Você sente que está sendo observado...",
+	"As luzes tremem. Alguém está chegando...",
+}
+local LEAVE_MSG = {"O silêncio voltou... por enquanto.", "Os passos se afastaram.", "A casa respira de novo."}
+local function pick(list) return list[math.random(1, #list)] end
+local function rnd(r) return math.random(r[1], r[2]) end
+
+---------------------------------------------------------------------
 -- Controlador de uma fase
 ---------------------------------------------------------------------
 function M.start(level, kinds, ctx, opts)
@@ -483,6 +521,31 @@ function M.start(level, kinds, ctx, opts)
 		return O + Vector3.new((N - 1) * S, 1, (N - 1) * S)
 	end
 
+	-- célula longe de todos e fora da vista de todos (para a criatura surgir sem ser vista)
+	function ctrl.hiddenCell(minDist)
+		local targets = ctx.getTargets()
+		local rp = RaycastParams.new()
+		rp.FilterType = Enum.RaycastFilterType.Exclude
+		rp.RespectCanCollide = true
+		local ignore = {folder}
+		for _, t in ipairs(targets) do table.insert(ignore, t.ch) end
+		rp.FilterDescendantsInstances = ignore
+		local ok, far, farD = {}, nil, -1
+		for i = 0, N - 1 do for j = 0, N - 1 do
+			local c = O + Vector3.new(i * S, 1, j * S)
+			local good, minD = true, math.huge
+			for _, t in ipairs(targets) do
+				local head = t.root.Position + Vector3.new(0, 1.5, 0)
+				local to = c + Vector3.new(0, 1.5, 0) - head
+				minD = math.min(minD, to.Magnitude)
+				if to.Magnitude < minDist or not workspace:Raycast(head, to, rp) then good = false end
+			end
+			if good then table.insert(ok, c) end
+			if minD > farD then far, farD = c, minD end
+		end end
+		return #ok > 0 and ok[math.random(1, #ok)] or far
+	end
+
 	function ctrl.updateChase()
 		local any = ctrl.rage
 		for _, w in ipairs(ctrl.walkers) do if w.hunting then any = true end end
@@ -492,13 +555,26 @@ function M.start(level, kinds, ctx, opts)
 	function ctrl:Spawn(kind, o)
 		o = o or {}
 		local w = newWalker(kind, ctrl, level, ctx)
+		if o.at then w:place(o.at) end
 		table.insert(ctrl.walkers, w)
 		if o.grace then ctrl.graceUntil = os.clock() + o.grace end
 		return w
 	end
 
+	function ctrl:Despawn(w)
+		w:destroy()
+		local i = table.find(ctrl.walkers, w)
+		if i then table.remove(ctrl.walkers, i) end
+		ctrl.updateChase()
+	end
+
 	function ctrl:SetRage(v)
 		ctrl.rage = v
+		if v and opts.visit then -- na fúria a visitante fica de vez
+			local w = ctrl.visitor
+			if w and w.alive then w.onRetreat = nil
+			else ctrl.visitor = ctrl:Spawn(opts.visit, {at = ctrl.hiddenCell(35)}) end
+		end
 		ctrl.updateChase()
 	end
 
@@ -576,6 +652,37 @@ function M.start(level, kinds, ctx, opts)
 		model:Destroy()
 		ctx.rush("end")
 	end
+
+	-- a visitante: aviso -> chega -> caça -> some quando ninguém olha -> volta depois
+	local function visitLoop(kind)
+		local function sleep(sec) -- false se a fase acabou ou entrou na fúria
+			local t = os.clock() + sec
+			while ctrl.alive and not ctrl.rage and os.clock() < t do task.wait(0.25) end
+			return ctrl.alive and not ctrl.rage
+		end
+		if not sleep((opts.grace or 25) + rnd(VISIT.first)) then return end
+		while true do
+			ctx.notify(pick(VISIT_MSG), VISIT.warn + 2, "warn")
+			ctrl:FlickerAll(VISIT.warn + 1.5)
+			if not sleep(VISIT.warn) then return end
+			local w = ctrl:Spawn(kind, {at = ctrl.hiddenCell(45)})
+			ctrl.visitor = w
+			local gone = false
+			w.onRetreat = function() gone = true end -- pegou alguém ou o amuleto a afastou
+			local untilT = os.clock() + rnd(VISIT.stay)
+			while ctrl.alive and not ctrl.rage and not gone and os.clock() < untilT do task.wait(0.25) end
+			if not gone then -- só desaparece quando ninguém está olhando
+				local t = os.clock() + VISIT.leaveWait
+				while ctrl.alive and not ctrl.rage and w.watched and os.clock() < t do task.wait(0.25) end
+			end
+			if not ctrl.alive or ctrl.rage then return end
+			ctrl:Despawn(w); ctrl.visitor = nil
+			ctrl:FlickerAll(1.5)
+			ctx.notify(pick(LEAVE_MSG), 4)
+			if not sleep(rnd(VISIT.every)) then return end
+		end
+	end
+	if opts.visit then task.spawn(visitLoop, opts.visit) end
 
 	for _, kind in ipairs(kinds) do
 		if kind == "coro" then

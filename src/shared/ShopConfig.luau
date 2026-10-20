@@ -5,9 +5,9 @@ return {
 	-- Itens pagos = somente pacotes de moedas (Developer Products vendidos em Robux).
 	-- Nada de benefício direto: quem não paga ganha as mesmas moedas jogando.
 	CoinPacks = {
-		{id = 0, coins = 300, name = "Punhado de Moedas"},
-		{id = 0, coins = 800, name = "Bolsa de Moedas"},
-		{id = 0, coins = 2000, name = "Baú de Moedas"},
+		{id = 2042372620, coins = 300, name = "Punhado de Moedas"},
+		{id = 2037365404, coins = 800, name = "Bolsa de Moedas"},
+		{id = 2036387345, coins = 2000, name = "Baú de Moedas"},
 	},
 
 	Reward = {

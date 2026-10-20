@@ -6,6 +6,7 @@ local rad = math.rad
 local function C(r, g, b) return Color3.fromRGB(r, g, b) end
 local GOLD = C(190, 150, 70)
 local CYL = Enum.PartType.Cylinder
+local PortraitArt = require(game:GetService('ReplicatedStorage'):WaitForChild('PortraitArt'))
 
 local STYLE = {
 	mansion = {H = 16, wall = C(98, 54, 58), wallMat = M.Fabric, wain = C(50, 32, 24), wainMat = M.Wood, rail = C(112, 80, 44),
@@ -25,7 +26,8 @@ local STYLE = {
 		gate = C(20, 18, 22), frame = C(40, 36, 46), center = 'Altar'},
 }
 
-local function part(parent, name, size, cf, color, mat, o)
+local part
+function part(parent, name, size, cf, color, mat, o)
 	o = o or {}
 	local p = Instance.new('Part')
 	p.Name = name; p.Size = size; p.CFrame = cf; p.Anchored = true
@@ -72,6 +74,39 @@ end
 local function books(p, W, D, y)
 	p('Books', V3(W / 2 - 0.6, 1.9, D - 0.5), V3(-W / 4, y, 0.1), C(124, 44, 44), M.Fabric)
 	p('Books', V3(W / 2 - 0.6, 1.9, D - 0.5), V3(W / 4, y, 0.1), C(44, 64, 96), M.Fabric)
+end
+
+
+-- armadura de cavaleiro em aco escuro com detalhes dourados, plumas e alabarda (p = funcao de peca; frente = -Z)
+function B.armor(p)
+	local st, dk, gd = C(84, 88, 98), C(44, 46, 54), GOLD
+	local function pair(name, size, y, x, z, color, mat, o)
+		for _, sx in ipairs({-1, 1}) do p(name, size, V3(sx * x, y, z), color, mat, o) end
+	end
+	p('Pedestal', V3(2.2, 0.8, 1.6), V3(0, 0.4, 0), C(60, 56, 54), M.Slate)
+	pair('Boot', V3(0.55, 0.7, 1), 1.15, 0.4, -0.15, dk, M.Metal)
+	pair('Greave', V3(0.46, 1.5, 0.5), 2.25, 0.4, 0, st, M.Metal)
+	pair('Knee', V3(0.6, 0.6, 0.6), 3.1, 0.4, -0.05, gd, M.Metal, {sphere = true})
+	pair('Thigh', V3(0.52, 1.2, 0.56), 3.8, 0.4, 0, st, M.Metal)
+	p('Tasset', V3(1.5, 0.7, 0.8), V3(0, 4.55, 0), dk, M.Metal)
+	p('Belt', V3(1.55, 0.2, 0.85), V3(0, 4.95, 0), gd, M.Metal)
+	p('Chest', V3(1.6, 1.9, 0.95), V3(0, 5.95, 0), st, M.Metal)
+	p('Ridge', V3(0.16, 1.7, 0.1), V3(0, 5.95, -0.52), gd, M.Metal)
+	pair('Pauldron', V3(0.95, 0.75, 0.95), 6.85, 1.05, 0, st, M.Metal, {sphere = true})
+	pair('PauldronTrim', V3(1, 0.12, 1), 6.55, 1.05, 0, gd, M.Metal)
+	pair('UpperArm', V3(0.42, 1.2, 0.42), 5.95, 1.1, 0, dk, M.Metal)
+	pair('LowerArm', V3(0.4, 1.1, 0.4), 4.9, 1.1, -0.2, st, M.Metal)
+	pair('Gauntlet', V3(0.5, 0.5, 0.5), 4.2, 1.1, -0.3, dk, M.Metal)
+	p('Neck', V3(0.55, 0.35, 0.55), V3(0, 7.05, 0), dk, M.Metal)
+	p('Helm', V3(1.05, 1.15, 1.05), V3(0, 7.75, 0), st, M.Metal, {sphere = true})
+	p('Visor', V3(0.75, 0.1, 0.1), V3(0, 7.75, -0.52), C(6, 6, 8), M.SmoothPlastic)
+	p('VisorSlit', V3(0.1, 0.5, 0.1), V3(0, 7.55, -0.52), C(6, 6, 8), M.SmoothPlastic)
+	p('Crest', V3(0.16, 0.2, 1.1), V3(0, 8.3, 0), gd, M.Metal)
+	p('Plume', V3(0.3, 1, 0.8), V3(0, 8.8, 0.15), C(120, 22, 30), M.Fabric, {collide = false})
+	p('Shaft', V3(0.16, 10, 0.16), V3(1.55, 5.2, -0.3), C(70, 50, 34), M.Wood)
+	p('AxeBlade', V3(0.12, 1.3, 1), V3(1.55, 9.6, -0.8), st, M.Metal)
+	p('SpearTip', V3(0.26, 1, 0.26), V3(1.55, 10.7, -0.3), st, M.Metal)
+	p('Shaft', V3(0.2, 0.3, 0.2), V3(1.55, 0.5, -0.3), gd, M.Metal)
 end
 
 local PIECES = {}
@@ -155,16 +190,7 @@ PIECES.mansion = {
 			p('ChairBack', V3(1.8, 2.6, 0.3), V3(x, 3.2, -3), wd, M.Wood)
 		end
 	end},
-	{1.6, function(p) -- armadura
-		local st = C(150, 150, 158)
-		p('Pedestal', V3(1.8, 0.8, 1.8), V3(0, 0.4, 0), C(60, 56, 54), M.Slate)
-		p('Legs', V3(1.1, 2.2, 0.6), V3(0, 1.9, 0), st, M.Metal)
-		p('Chest', V3(1.6, 2.2, 0.9), V3(0, 4.1, 0), st, M.Metal)
-		p('Helm', V3(0.95, 1.1, 0.95), V3(0, 5.75, 0), st, M.Metal, {sphere = true})
-		p('Visor', V3(0.7, 0.1, 0.1), V3(0, 5.8, -0.5), C(8, 8, 10), M.SmoothPlastic)
-		p('Spear', V3(0.18, 8, 0.18), V3(1.3, 4.8, 0), C(70, 50, 34), M.Wood)
-		p('Tip', V3(0.35, 0.9, 0.12), V3(1.3, 9, 0), st, M.Metal)
-	end},
+	{1.6, function(p) B.armor(p) end},
 }
 
 PIECES.sanatorium = {
@@ -286,15 +312,16 @@ PIECES.crypt = {
 
 -- decoracao de parede (alto, sem colisao)
 local DECOR = {
-	mansion = function(p, rng) -- retrato de familia; as vezes os olhos brilham
+	mansion = function(p, rng) -- retrato: mesmo desenho (PortraitArt) das tres figuras do lobby
 		p('Frame', V3(4, 5.4, 0.4), V3(0, 8, 0.05), GOLD, M.Metal)
-		p('Canvas', V3(3.4, 4.8, 0.3), V3(0, 8, -0.05), C(30, 26, 24), M.Fabric)
-		p('Shoulders', V3(2.6, 1.6, 0.2), V3(0, 7, -0.2), C(14, 12, 14), M.Fabric, {sphere = true})
-		p('Face', V3(1.3, 1.8, 0.2), V3(0, 8.4, -0.22), C(168, 150, 124), M.SmoothPlastic, {sphere = true})
-		if rng:NextNumber() < 0.25 then
-			p('Eye', V3(0.25, 0.15, 0.1), V3(-0.3, 8.55, -0.34), C(255, 30, 30), M.Neon)
-			p('Eye', V3(0.25, 0.15, 0.1), V3(0.3, 8.55, -0.34), C(255, 30, 30), M.Neon)
-		end
+		local who = ({'Clara', 'Augustus', 'Eleanora'})[rng:NextInteger(1, 3)]
+		local cv = p('Canvas', V3(3.4, 4.6, 0.3), V3(0, 8, -0.05), C(30, 26, 24), M.SmoothPlastic)
+		local sg = Instance.new('SurfaceGui')
+		sg.Face = Enum.NormalId.Front; sg.PixelsPerStud = 60;
+		sg.LightInfluence = 0.6; sg.Parent = cv
+		local art = Instance.new('Frame')
+		art.Size = UDim2.fromScale(1, 1); art.BorderSizePixel = 0; art.ClipsDescendants = true; art.Parent = sg
+		PortraitArt.paint(who, art)
 	end,
 	sanatorium = function(p) -- quadro de avisos / prontuario
 		p('Board', V3(3.6, 2.6, 0.2), V3(0, 6.5, 0.1), C(206, 210, 200), M.Fabric)
@@ -310,7 +337,7 @@ local DECOR = {
 local WINDOW = {
 	mansion = function(p, rng, th)
 		p('Frame', V3(3.8, 7, 0.5), V3(0, 8, 0.1), th.frame, M.Wood)
-		p('Pane', V3(3, 6.2, 0.2), V3(0, 8, -0.05), C(110, 130, 190), M.Neon, {t = 0.4, collide = false})
+		p('Pane', V3(3, 6.2, 0.2), V3(0, 8, -0.05), C(34, 42, 66), M.SmoothPlastic, {t = 0.25, collide = false})
 		p('Mullion', V3(0.15, 6.2, 0.1), V3(0, 8, -0.2), th.frame, M.Wood, {collide = false})
 		p('Mullion', V3(3, 0.15, 0.1), V3(0, 8, -0.2), th.frame, M.Wood, {collide = false})
 		p('Curtain', V3(1, 7.4, 0.6), V3(-2.2, 7.6, -0.3), C(100, 28, 36), M.Fabric, {collide = false})
@@ -319,7 +346,7 @@ local WINDOW = {
 	end,
 	sanatorium = function(p, rng, th)
 		p('Frame', V3(2.4, 3, 0.4), V3(0, 9.5, 0.1), th.frame, M.Metal)
-		p('Pane', V3(2, 2.6, 0.2), V3(0, 9.5, -0.05), C(190, 230, 220), M.Neon, {t = 0.5, collide = false})
+		p('Pane', V3(2, 2.6, 0.2), V3(0, 9.5, -0.05), C(70, 90, 86), M.SmoothPlastic, {t = 0.3, collide = false})
 		p('Bar', V3(0.12, 2.6, 0.1), V3(-0.4, 9.5, -0.2), th.frame, M.Metal, {collide = false})
 		p('Bar', V3(0.12, 2.6, 0.1), V3(0.4, 9.5, -0.2), th.frame, M.Metal, {collide = false})
 	end,
@@ -592,4 +619,5 @@ function B.build(cfg)
 	return root
 end
 
+B.part = part
 return B

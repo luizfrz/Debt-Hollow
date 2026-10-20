@@ -36,6 +36,7 @@ ambience:Play(); heartbeat:Play()
 ---------------------------------------------------------------------
 local gui = Instance.new("ScreenGui")
 gui.Name = "HorrorHUD"; gui.ResetOnSpawn = false; gui.IgnoreGuiInset = true; gui.DisplayOrder = 10
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling -- o retrato do susto (PortraitArt) usa ZIndex 1..N dentro do próprio quadro
 gui.Parent = player:WaitForChild("PlayerGui")
 
 -- celular: controles de toque e interface que se adapta ao tamanho da tela
@@ -359,9 +360,13 @@ end)
 -- Mensagens, objetivo, perseguição, Coro
 ---------------------------------------------------------------------
 local msgToken = 0
-Remotes.Notify.OnClientEvent:Connect(function(text, dur)
+Remotes.Notify.OnClientEvent:Connect(function(text, dur, style)
 	msgToken += 1
 	local my = msgToken
+	local warn = style == "warn" -- aviso de chegada de criatura: vermelho, maior, no meio da tela
+	message.TextColor3 = warn and Color3.fromRGB(235, 70, 60) or Color3.fromRGB(220, 215, 205)
+	message.TextSize = warn and 32 or 22
+	message.Position = UDim2.fromScale(0.5, warn and 0.36 or 0.82)
 	message.Text = text
 	TweenService:Create(message, TweenInfo.new(0.4), {TextTransparency = 0, TextStrokeTransparency = 0.5}):Play()
 	task.delay(dur or 4, function()
@@ -377,6 +382,21 @@ local chasing = false
 Remotes.Chase.OnClientEvent:Connect(function(v) chasing = v end)
 
 local shakeBoost = 0
+
+-- aviso de visita: clarão vermelho, tremor curto e um gemido grave
+local warnFlash = Instance.new("Frame")
+warnFlash.Size = UDim2.fromScale(1, 1); warnFlash.BackgroundColor3 = Color3.fromRGB(120, 0, 0)
+warnFlash.BackgroundTransparency = 1; warnFlash.BorderSizePixel = 0; warnFlash.ZIndex = 20; warnFlash.Parent = gui
+local omen = newSound(SOUNDS.scream, 0.6, false)
+omen.PlaybackSpeed = 0.3
+Remotes.Notify.OnClientEvent:Connect(function(_, _, style)
+	if style ~= "warn" then return end
+	omen:Play()
+	warnFlash.BackgroundTransparency = 0.55
+	TweenService:Create(warnFlash, TweenInfo.new(1.6), {BackgroundTransparency = 1}):Play()
+	shakeBoost = math.max(shakeBoost, 0.35)
+	task.delay(2, function() if shakeBoost == 0.35 then shakeBoost = 0 end end)
+end)
 Remotes.Rush.OnClientEvent:Connect(function(stage)
 	if stage == "warn" then
 		shakeBoost = 0.25
@@ -397,10 +417,10 @@ flashPart.Anchored = true; flashPart.CanCollide = false; flashPart.CanQuery = fa
 flashPart.Parent = camera
 -- feixe direcionado: núcleo estreito e forte + borda suave e fraca (não ilumina a sala toda)
 local spot = Instance.new("SpotLight")
-spot.Face = Enum.NormalId.Front; spot.Range = 45; spot.Angle = 22; spot.Brightness = 7
+spot.Face = Enum.NormalId.Front; spot.Range = 50; spot.Angle = 26; spot.Brightness = 22
 spot.Color = Color3.fromRGB(255, 244, 220); spot.Shadows = not touch; spot.Parent = flashPart
 local halo = Instance.new("SpotLight")
-halo.Face = Enum.NormalId.Front; halo.Range = 24; halo.Angle = 46; halo.Brightness = 0.9
+halo.Face = Enum.NormalId.Front; halo.Range = 24; halo.Angle = 50; halo.Brightness = 3
 halo.Color = Color3.fromRGB(255, 236, 200); halo.Shadows = false; halo.Parent = flashPart
 
 local flashOn, battery, stamina = true, 100, 100
@@ -518,13 +538,17 @@ RunService.RenderStepped:Connect(function(dt)
 		local premium = player:GetAttribute("PremiumLight")
 		local drain = 1.1 * (1 - 0.15 * (player:GetAttribute("BatteryLevel") or 0)) * (premium and 0.7 or 1)
 		battery = math.max(0, battery - dt * drain)
-		spot.Range = premium and 60 or 45
-		spot.Angle = premium and 28 or 22
-		halo.Range = premium and 32 or 24
-		halo.Angle = premium and 54 or 46
-		local dim = battery < 15 and math.random() < 0.35
-		spot.Brightness = dim and 1 or (premium and 9 or 7)
-		halo.Brightness = dim and 0.1 or 0.9
+		-- estilo Outlast: 100% = feixe forte; quanto menor a bateria, mais fraco, curto e estreito; abaixo de 20% pisca
+		local k = battery / 100
+		local lvl = 0.12 + 0.88 * k ^ 0.8
+		local boost = premium and 1.25 or 1
+		spot.Range = (30 + 50 * lvl) * boost
+		spot.Angle = (14 + 12 * lvl) * (premium and 1.1 or 1)
+		halo.Range = (16 + 24 * lvl) * boost
+		halo.Angle = 34 + 16 * lvl
+		local flick = battery < 20 and math.random() < (0.45 - battery / 60)
+		spot.Brightness = (flick and 0.15 or 1) * 22 * lvl * boost
+		halo.Brightness = (flick and 0.05 or 1) * 3 * lvl
 	else
 		battery = math.min(100, battery + dt * (flashOn and 0 or 4))
 		if battery <= 0 then flashOn = false end
@@ -562,6 +586,11 @@ RunService.RenderStepped:Connect(function(dt)
 	camera.FieldOfView = 70 - fear * 8
 
 	-- agachar + tremor da câmera
+	-- mouse livre: só trava (giro da câmera) enquanto o botão direito está pressionado
+	UIS.MouseIconEnabled = true
+	if not touch then -- botão direito = trava no centro e gira sem limite (360); solto = cursor livre
+		UIS.MouseBehavior = UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) and Enum.MouseBehavior.LockCenter or Enum.MouseBehavior.Default
+	end
 	crouchY += ((crouchOn and -1.5 or 0) - crouchY) * math.min(1, dt * 8)
 	if hum then
 		local s = fear * fear * 0.35 + shakeBoost * 0.3
@@ -571,3 +600,44 @@ RunService.RenderStepped:Connect(function(dt)
 end)
 
 Remotes.ClientReady:FireServer()
+
+---------------------------------------------------------------------
+-- Câmera própria (PC): cursor livre; segurando o botão direito o mouse trava no centro e gira 360° sem limite
+---------------------------------------------------------------------
+if not touch then
+	player.CameraMode = Enum.CameraMode.Classic -- LockFirstPerson (configurado no StarterPlayer) prende o mouse
+	local yaw, pitch, ready, lastFix = 0, 0, false, 0
+	local SENS = 0.0028
+	RunService:BindToRenderStep("HorrorCamera", Enum.RenderPriority.Camera.Value + 1, function()
+		local ch = player.Character
+		local hum = ch and ch:FindFirstChildOfClass("Humanoid")
+		local hrp = ch and ch:FindFirstChild("HumanoidRootPart")
+		if not (hum and hrp) or hum.Health <= 0 or jumping then ready = false; return end
+		if camera.CameraType ~= Enum.CameraType.Scriptable then camera.CameraType = Enum.CameraType.Scriptable end
+		hum.AutoRotate = false
+		if not ready then
+			local look = hrp.CFrame.LookVector
+			yaw = math.atan2(-look.X, -look.Z); pitch = 0; ready = true
+		end
+		if player:GetAttribute("Hidden") then
+			local look = hrp.CFrame.LookVector
+			yaw = math.atan2(-look.X, -look.Z); pitch = math.clamp(pitch, -0.5, 0.5)
+		elseif UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
+			local d = UIS:GetMouseDelta()
+			yaw -= d.X * SENS
+			pitch = math.clamp(pitch - d.Y * SENS, -1.45, 1.45)
+		end
+		if not player:GetAttribute("Hidden") then
+			hrp.CFrame = CFrame.new(hrp.Position) * CFrame.Angles(0, yaw, 0)
+		end
+		local head = ch:FindFirstChild("Head")
+		local eye = (head and head.Position or hrp.Position + Vector3.new(0, 1.5, 0)) + hum.CameraOffset
+		camera.CFrame = CFrame.new(eye) * CFrame.Angles(0, yaw, 0) * CFrame.Angles(pitch, 0, 0) * CFrame.new(0, 0, -0.4)
+		if os.clock() - lastFix > 0.4 then -- primeira pessoa: esconde o próprio corpo
+			lastFix = os.clock()
+			for _, d in ipairs(ch:GetDescendants()) do
+				if d:IsA("BasePart") then d.LocalTransparencyModifier = 1 end
+			end
+		end
+	end)
+end

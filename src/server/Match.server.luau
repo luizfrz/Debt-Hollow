@@ -36,23 +36,23 @@ local PHASES = {
 		item = "fuse", itemLabel = "Fusíveis", count = 5, centerObj = "Gerador", centerAction = "Inserir fusíveis", holdSec = 1.5,
 		deliverText = "Leve os fusíveis ao gerador (centro)", exitText = "Fuja pela porta a leste!",
 		doneMsg = "O GERADOR LIGOU! A porta do porão está abrindo... ELA SABE ONDE VOCÊ ESTÁ. CORRA!",
-		entities = {"clara"}, grace = 30,
-		hint = "Fusíveis brilham no escuro. Clara só se move quando ninguém olha. Armários (E) escondem você.",
-		light = {fogStart = 10, fogEnd = 90, fog = {8, 8, 10}, ambient = {10, 10, 14}, tint = {215, 225, 235}, atmo = 0.55}},
+		entities = {}, visit = "clara", grace = 30,
+		hint = "Fusíveis brilham no escuro. Quando o aviso surgir, Clara está na casa: não tire os olhos dela ou esconda-se num armário (E).",
+		light = {fogStart = 25, fogEnd = 170, fog = {14, 14, 18}, ambient = {52, 52, 64}, tint = {225, 232, 240}, atmo = 0.3}},
 	{id = 2, level = "Fase2", title = " O SANATÓRIO", sub = "Os pacientes nunca saíram. Eleanora ainda os procura.",
 		item = "page", itemLabel = "Páginas", count = 4, centerObj = "Incinerador", centerAction = "Queimar páginas", holdSec = 2,
 		deliverText = "Queime as páginas no incinerador (centro)", exitText = "Fuja pela porta a leste!",
 		doneMsg = "A FORNALHA RUGE! Ela ouviu... não há mais silêncio que te proteja. CORRA!",
 		entities = {"eleanora"}, grace = 30,
 		hint = "Eleanora chora e só ouve: Ande devagar, agache (C) e não corra perto dela.",
-		light = {fogStart = 10, fogEnd = 85, fog = {10, 16, 14}, ambient = {10, 16, 14}, tint = {205, 235, 220}, atmo = 0.6}},
+		light = {fogStart = 25, fogEnd = 165, fog = {16, 24, 22}, ambient = {50, 66, 60}, tint = {215, 238, 228}, atmo = 0.3}},
 	{id = 3, level = "Fase3", title = "A CRIPTA", sub = "Aqui começou. Aqui termina.",
 		item = "candle", itemLabel = "Velas", count = 3, centerObj = "Altar", centerAction = "Romper o contrato", holdSec = 4,
 		deliverText = "Leve as velas ao altar (centro)", exitText = "Clara voltou. Fuja pelo portão leste!",
 		doneMsg = "O CONTRATO ARDE! O Credor não aceita perder... Clara está vindo. CORRA PELO PORTÃO!",
 		entities = {"augustus", "coro"}, grace = 30, finale = "clara",
 		hint = "Augustus vê e ouve você. Quando as luzes piscarem e as vozes chegarem: esconda-se.",
-		light = {fogStart = 8, fogEnd = 75, fog = {16, 6, 6}, ambient = {16, 8, 8}, tint = {240, 205, 200}, atmo = 0.65}},
+		light = {fogStart = 20, fogEnd = 150, fog = {24, 10, 10}, ambient = {64, 40, 40}, tint = {240, 215, 210}, atmo = 0.3}},
 }
 
 ---------------------------------------------------------------------
@@ -75,8 +75,8 @@ local function eachMatchPlayer(fn)
 	if not match then return end
 	for pl in pairs(match.players) do if pl.Parent then fn(pl) end end
 end
-local function notifyAll(text, dur)
-	eachMatchPlayer(function(pl) Remotes.Notify:FireClient(pl, text, dur or 4) end)
+local function notifyAll(text, dur, style)
+	eachMatchPlayer(function(pl) Remotes.Notify:FireClient(pl, text, dur or 4, style) end)
 end
 local function aliveList()
 	local l = {}
@@ -187,7 +187,7 @@ function ctx.getHidden()
 	return list
 end
 function ctx.catch(pl, kind) return catchPlayer(pl, kind) end
-function ctx.notify(text, dur) notifyAll(text, dur) end
+function ctx.notify(text, dur, style) notifyAll(text, dur, style) end
 function ctx.chase(v) eachMatchPlayer(function(pl) Remotes.Chase:FireClient(pl, v) end) end
 local rushActive = false -- o Coro está vindo ou passando: ninguém sai do armário
 function ctx.rush(stage)
@@ -327,7 +327,7 @@ local function runPhase(P)
 	end
 
 	-- criaturas
-	local ctrl = Entities.start(level, P.entities, ctx, {grace = P.grace, rushFirst = 50})
+	local ctrl = Entities.start(level, P.entities, ctx, {grace = P.grace, rushFirst = 50, visit = P.visit})
 	match.ctrl = ctrl
 
 	-- ponto de entrega (gerador / incinerador / altar)
